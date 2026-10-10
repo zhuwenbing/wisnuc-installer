@@ -1,6 +1,0 @@
-[Unit]
-Description=PhiNAS Bootstrap Update
-
-[Service]
-Type=simple
-ExecStart=/phi/phi-bootstrap-update

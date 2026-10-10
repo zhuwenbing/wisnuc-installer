@@ -8,6 +8,22 @@ MNT=tmp/mnt
 TMP=tmp/imagify
 OUTPUT=output
 
+# 前置检查：build-image 硬性依赖 loop device、完整 /dev 和 mount 能力，
+# 在容器/受限宿主上不可用，提前给出明确报错而不是一路失败。
+if [ ! -e /dev/zero ]; then
+  echo "ERROR: /dev/zero 不存在，当前 /dev 不完整。" >&2
+  echo "  build-image.sh 需要 loop device 和 mount 能力，" >&2
+  echo "  请在物理机/虚拟机（或 --privileged 且加载 loop 模块的容器）上运行。" >&2
+  exit 1
+fi
+if ! losetup -f >/dev/null 2>&1; then
+  echo "ERROR: 无法分配 loop 设备，当前环境不支持。" >&2
+  echo "  build-image.sh 依赖 loop device（losetup）创建镜像，" >&2
+  echo "  请在物理机/虚拟机（或 --privileged 且加载 loop 模块的容器）上运行。" >&2
+  exit 1
+fi
+command -v tree >/dev/null 2>&1 || echo "WARN: 未安装 tree，仅影响最后的目录树打印（可选：apt install tree）"
+
 mkdir -p tmp
 rm -rf $TMP
 mkdir $TMP
@@ -27,15 +43,6 @@ losetup -d /dev/loop0
 rm -rf $TMP
 mkdir -p $TMP
 mkdir -p $MNT
-
-echo "untar $OUTPUT/ws215i-rootfs-emmc-base.tar.gz into $TMP dir"
-tar xzf $OUTPUT/ws215i-rootfs-emmc-base.tar.gz -C $TMP
-
-echo "cp $OUTPUT/wisnuc into $TMP dir"
-cp -r $OUTPUT/wisnuc $TMP
-
-echo "tar $OUTPUT/ws215i-rootfs-emmc.tar.gz"
-tar czf $OUTPUT/ws215i-rootfs-emmc.tar.gz -C $TMP .
 
 echo "create $IMAGEFILE"
 rm -rf $IMAGEFILE
@@ -65,36 +72,28 @@ echo "mount"
 mount -t ext4 /dev/loop0p1 $MNT
 
 if [ "$1" == "--debug" ] || [ "$1" == "-d" ]; then
-  echo "untar $OUTPUT/ws215i-rootfs-burn-base-debug.tar.gz" 
-  tar xzf $OUTPUT/ws215i-rootfs-burn-base-debug.tar.gz -C $MNT
+  echo "untar $OUTPUT/ws215i-debian13-rootfs-burn-base-debug.tar.gz" 
+  tar xzf $OUTPUT/ws215i-debian13-rootfs-burn-base-debug.tar.gz -C $MNT
 else
-  echo "untar $OUTPUT/ws215i-rootfs-burn-base.tar.gz" 
-  tar xzf $OUTPUT/ws215i-rootfs-burn-base.tar.gz -C $MNT
+  echo "untar $OUTPUT/ws215i-debian13-rootfs-burn-base.tar.gz" 
+  tar xzf $OUTPUT/ws215i-debian13-rootfs-burn-base.tar.gz -C $MNT
 fi
 
-echo "cp $OUTPUT/ws215i-rootfs-emmc.tar.gz" 
-cp $OUTPUT/ws215i-rootfs-emmc.tar.gz ${MNT}/wisnuc 
+echo "cp $OUTPUT/ws215i-debian13-rootfs-emmc-base.tar.gz" 
+cp $OUTPUT/ws215i-debian13-rootfs-emmc-base.tar.gz ${MNT}/wisnuc
 
 sync
 umount $MNT
 losetup -d /dev/loop0
-
-# for node version
-# readlink output/wisnuc/node/base  -> eg. 8.9.3
-NODEVER=$(readlink output/wisnuc/node/base)
-
-# for extracting appifi version
-# ls output/wisnuc/appifi-tarballs | awk -F "-" '{print $2}' -> 1.0.11
-APPIFIVER=$(ls output/wisnuc/appifi-tarballs | awk -F "-" '{print $2}')
 
 # for append build timestamp
 # date +"%y%m%d-%H%M%S" -> 180104-164540
 TIMESTAMP=$(date +"%y%m%d-%H%M%S")
 
 if [ "$1" == "--debug" ] || [ "$1" == "-d" ]; then
-  FILENAME=ws215i-ubuntu-16.04.3-node-${NODEVER}-appifi-${APPIFIVER}-build-${TIMESTAMP}-debug.img
+  FILENAME=ws215i-debian13-build-${TIMESTAMP}-debug.img
 else
-  FILENAME=ws215i-ubuntu-16.04.3-node-${NODEVER}-appifi-${APPIFIVER}-build-${TIMESTAMP}.img
+  FILENAME=ws215i-debian13-build-${TIMESTAMP}.img
 fi
 
 mv $IMAGEFILE $OUTPUT/$FILENAME
@@ -102,6 +101,3 @@ mv $IMAGEFILE $OUTPUT/$FILENAME
 echo "$OUTPUT/$FILENAME successfully created"
 
 tree $OUTPUT -L 3
-
-
-

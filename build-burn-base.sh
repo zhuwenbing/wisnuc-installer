@@ -8,19 +8,31 @@ TARGET=target/burn
 OUTPUT=output
 
 
+# 上次运行若在卸载前失败，会残留挂载的 /dev /proc /sys；
+# 先卸载再删除，否则 rm -rf 会遍历已挂载的 proc/sys 报 Operation not permitted
+umount -R ${TARGET}/dev 2>/dev/null || true
+umount -R ${TARGET}/proc 2>/dev/null || true
+umount -R ${TARGET}/sys 2>/dev/null || true
+
 rm -rf ${TARGET}
 mkdir -p ${TARGET}/wisnuc
 
-tar xzf assets/ubuntu-base-16.04.3-base-amd64.tar.gz -C ${TARGET}
+# 基于 Debian 13 (trixie) 构建烧录 U 盘的最小文件系统。
+# USB 烧录盘本身也是一个包含完整 rootfs 的 Debian 运行系统，不只是 ramdisk。
+debootstrap --variant=minbase --arch=amd64 trixie ${TARGET} http://deb.debian.org/debian
+
 cp assets/linux-image-4.3.3.001+_001_amd64.deb ${TARGET}
 
 cp assets/imageburn.sh ${TARGET}/wisnuc
 
 cat <<EOF > ${TARGET}/etc/apt/sources.list
-deb http://cn.archive.ubuntu.com/ubuntu/ xenial main restricted
-deb http://cn.archive.ubuntu.com/ubuntu/ xenial-updates main restricted
+deb http://mirrors.aliyun.com/debian/ trixie main contrib non-free non-free-firmware
+deb http://mirrors.aliyun.com/debian/ trixie-updates main contrib non-free non-free-firmware
+deb http://mirrors.aliyun.com/debian-security trixie-security main contrib non-free non-free-firmware
 EOF
 
+# minbase 基础系统不会预建 /etc/systemd/network，需先创建
+mkdir -p ${TARGET}/etc/systemd/network
 cat <<EOF > ${TARGET}/etc/systemd/network/wired.network
 [Match]
 Name=en*
@@ -28,9 +40,9 @@ Name=en*
 DHCP=ipv4
 EOF
 
-cat <<EOF > ${TARGET}/etc/resolv.conf
-nameserver 127.0.1.1
-EOF
+# 临时 DNS（chroot 期间使用）：chroot 共享宿主网络命名空间，
+# 直接复制宿主的 /etc/resolv.conf，避免硬编码 127.0.1.1 导致无法解析镜像源。
+cp /etc/resolv.conf ${TARGET}/etc/resolv.conf
 
 cat <<EOF > ${TARGET}/etc/hosts
 127.0.0.1 localhost
@@ -72,7 +84,8 @@ chroot ${TARGET} /bin/bash -c "dpkg -i linux-image-4.3.3.001+_001_amd64.deb"
 
 if [ "$1" == "--debug" ] || [ "$1" == "-d" ]; then
   echo "install extra packages"
-  chroot ${TARGET} /bin/bash -c "apt -y install sudo openssh-server net-tools iputils-ping parted vim"
+  # debug 模式下 enable systemd-resolved，需显式安装该子包（minbase 不默认装）
+  chroot ${TARGET} /bin/bash -c "apt -y install sudo openssh-server net-tools iputils-ping parted vim systemd-resolved"
   chroot ${TARGET} /bin/bash -c "useradd wisnuc -b /home -m -s /bin/bash"
   chroot ${TARGET} /bin/bash -c "echo wisnuc:wisnuc | chpasswd"
   chroot ${TARGET} /bin/bash -c "adduser wisnuc sudo"
@@ -97,13 +110,12 @@ umount ${TARGET}/dev
 rm ${TARGET}/linux-image-4.3.3.001+_001_amd64.deb
 
 if [ "$1" == "--debug" ] || [ "$1" == "-d" ]; then
-  TARNAME=ws215i-rootfs-burn-base-debug.tar.gz
+  TARNAME=ws215i-debian13-rootfs-burn-base-debug.tar.gz
 else
-  TARNAME=ws215i-rootfs-burn-base.tar.gz
+  TARNAME=ws215i-debian13-rootfs-burn-base.tar.gz
 fi
 
 echo "tar $OUTPUT/$TARNAME"
 tar czf $OUTPUT/$TARNAME -C ${TARGET} .
  
 echo "done"
-

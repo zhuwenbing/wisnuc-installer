@@ -1,6 +1,6 @@
 #!/bin/bash
 
-IMGFILE=/wisnuc/ws215i-rootfs-emmc.tar.gz
+IMGFILE=/wisnuc/ws215i-debian13-rootfs-emmc-base.tar.gz
 MNT=/run/mmc
 
 if [ ! -f $IMGFILE ]; then

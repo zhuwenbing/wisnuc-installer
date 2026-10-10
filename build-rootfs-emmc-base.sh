@@ -5,13 +5,19 @@ set -e
 TARGET=target/emmc
 OUTPUT=output
 
+# 上次运行若在卸载前失败，会残留挂载的 /dev /proc /sys；
+# 先卸载再删除，否则 rm -rf 会遍历已挂载的 proc/sys 报 Operation not permitted
+umount -R ${TARGET}/dev 2>/dev/null || true
+umount -R ${TARGET}/proc 2>/dev/null || true
+umount -R ${TARGET}/sys 2>/dev/null || true
+
 rm -rf ${TARGET}
-mkdir ${TARGET}
+mkdir -p ${TARGET}
 
-# create the empty directory
-mkdir -p ${TARGET}/wisnuc
-
-tar xzf assets/ubuntu-base-16.04.3-base-amd64.tar.gz -C ${TARGET}
+# 基于 Debian 13 (trixie) 构建 ws215i 的基础 rootfs。
+# debootstrap 会在 ${TARGET} 内创建最小基础系统（含 systemd），
+# 随后 chroot 安装其余软件包和 ws215i 定制内核。
+debootstrap --variant=minbase --arch=amd64 trixie ${TARGET} http://deb.debian.org/debian
 cp assets/linux-image-4.3.3.001+_001_amd64.deb ${TARGET}
 cp assets/sources.list ${TARGET}/etc/apt/sources.list
 
@@ -50,14 +56,11 @@ cat <<EOF > ${TARGET}/etc/systemd/timesyncd.conf
 
 [Time]
 #NTP=
-FallbackNTP=ntp.ubuntu.com
+FallbackNTP=ntp.debian.org
 EOF
 
-cp assets/wisnuc-bootstrap-update.service ${TARGET}/lib/systemd/system/wisnuc-bootstrap-update.service
-cp assets/wisnuc-bootstrap-update.timer ${TARGET}/lib/systemd/system/wisnuc-bootstrap-update.timer
-cp assets/wisnuc-bootstrap.service ${TARGET}/lib/systemd/system/wisnuc-bootstrap.service
-cp assets/wetty.service ${TARGET}/lib/systemd/system/wetty.service
-
+# minbase 基础系统不会预建 /etc/systemd/network，需先创建
+mkdir -p ${TARGET}/etc/systemd/network
 cat <<EOF > ${TARGET}/etc/systemd/network/wired.network
 [Match]
 Name=en*
@@ -65,10 +68,11 @@ Name=en*
 DHCP=ipv4
 EOF
 
-# This is a temporary setting for chroot
-cat <<EOF > ${TARGET}/etc/resolv.conf
-nameserver 127.0.1.1
-EOF
+# 临时 DNS（chroot 期间使用）：chroot 共享宿主网络命名空间，
+# 直接复制宿主的 /etc/resolv.conf，避免硬编码 127.0.1.1
+# （那是 Ubuntu 16.04 的 systemd-resolved stub，现代宿主上不生效）。
+# 该文件在脚本末尾会被替换为 systemd-resolved 的符号链接（用于最终镜像）。
+cp /etc/resolv.conf ${TARGET}/etc/resolv.conf
 
 cat <<EOF > ${TARGET}/etc/hosts
 127.0.0.1 localhost
@@ -80,8 +84,6 @@ ff02::1 ip6-allnodes
 ff02::2 ip6-allrouters
 EOF
 
-# replaced by systemd-firstboot.service
-# reverted
 cat <<EOF > ${TARGET}/etc/hostname
 wisnuc
 EOF
@@ -92,20 +94,21 @@ mount -t proc   proc  ${TARGET}/proc
 mount -t sysfs  sys   ${TARGET}/sys
 
 chroot ${TARGET} /bin/bash -c "apt update"
-chroot ${TARGET} /bin/bash -c "apt -y install sudo initramfs-tools openssh-server parted vim-common tzdata net-tools iputils-ping"
-chroot ${TARGET} /bin/bash -c "apt -y install avahi-daemon avahi-utils btrfs-tools udisks2"
-chroot ${TARGET} /bin/bash -c "apt -y install libimage-exiftool-perl imagemagick ffmpeg"
-chroot ${TARGET} /bin/bash -c "apt -y install samba rsyslog minidlna"
-
+# Debian 13 中 systemd-resolved / systemd-timesyncd 是独立子包，minbase 不默认安装，需显式装上
+# （否则 systemd-resolved.service unit 不存在，enable 会失败；timesyncd 供 firstboot 的 set-ntp 使用）
+chroot ${TARGET} /bin/bash -c "apt -y install sudo initramfs-tools openssh-server parted tzdata net-tools iputils-ping systemd-resolved systemd-timesyncd"
+chroot ${TARGET} /bin/bash -c "apt -y install avahi-daemon avahi-utils udisks2"
+chroot ${TARGET} /bin/bash -c "apt -y install rsyslog"
 
 chroot ${TARGET} /bin/bash -c "useradd wisnuc -b /home -m -s /bin/bash"
 chroot ${TARGET} /bin/bash -c "echo wisnuc:wisnuc | chpasswd"
 chroot ${TARGET} /bin/bash -c "adduser wisnuc sudo"
 
+# 安装 ws215i 定制内核（4.3.3）并 hold，避免被后续 apt 升级/替换掉。
+# Debian 13 没有 Ubuntu 的 linux-image-generic/linux-headers-generic meta 包
+# （debootstrap minbase 也不安装 meta 内核），因此直接 hold 定制内核包本身。
 chroot ${TARGET} /bin/bash -c "dpkg -i linux-image-4.3.3.001+_001_amd64.deb"
-
-chroot ${TARGET} /bin/bash -c "apt-mark hold linux-image-generic"
-chroot ${TARGET} /bin/bash -c "apt-mark hold linux-headers-generic"
+chroot ${TARGET} /bin/bash -c "apt-mark hold linux-image-4.3.3.001+"
 
 # This does not work in chroot-ed environment.
 # chroot ${TARGET} /bin/bash -c "timedatectl timedatectl set-timezone Asia/Shanghai"
@@ -116,10 +119,7 @@ chroot ${TARGET} /bin/bash -c "apt-mark hold linux-headers-generic"
 chroot ${TARGET} /bin/bash -c "systemctl enable systemd-networkd"
 chroot ${TARGET} /bin/bash -c "systemctl enable systemd-resolved"
 chroot ${TARGET} /bin/bash -c "systemctl enable wisnuc-firstboot"
-chroot ${TARGET} /bin/bash -c "systemctl enable wisnuc-bootstrap-update.timer"
-chroot ${TARGET} /bin/bash -c "systemctl enable wisnuc-bootstrap"
-chroot ${TARGET} /bin/bash -c "systemctl enable wetty"
-chroot ${TARGET} /bin/bash -c "systemctl disable smbd nmbd minidlna"
+# samba/minidlna 不再安装，故无需（也无法）禁用其服务
 
 ln -s vmlinuz-4.3.3.001+ ${TARGET}/boot/bzImage
 ln -s initrd.img-4.3.3.001+ ${TARGET}/boot/ramdisk
@@ -139,13 +139,6 @@ rm ${TARGET}/etc/resolv.conf
 # create symbolic link as systemd-resolved requires.
 ln -sf /run/systemd/resolve/resolv.conf ${TARGET}/etc/resolv.conf
 
-tar czf ${OUTPUT}/ws215i-rootfs-emmc-base.tar.gz -C ${TARGET} .
+tar czf ${OUTPUT}/ws215i-debian13-rootfs-emmc-base.tar.gz -C ${TARGET} .
 
 echo done
-
-
-
-
-
-
-
