@@ -18,7 +18,7 @@ mkdir -p ${TARGET}
 # debootstrap 会在 ${TARGET} 内创建最小基础系统（含 systemd），
 # 随后 chroot 安装其余软件包和 ws215i 定制内核。
 debootstrap --variant=minbase --arch=amd64 trixie ${TARGET} http://deb.debian.org/debian
-cp assets/linux-image-4.3.3.001+_001_amd64.deb ${TARGET}
+cp assets/linux-image-5.10.1.001+_5.10.1.001+-2_amd64.deb ${TARGET}
 cp assets/sources.list ${TARGET}/etc/apt/sources.list
 
 touch ${TARGET}/etc/firstboot
@@ -104,11 +104,11 @@ chroot ${TARGET} /bin/bash -c "useradd wisnuc -b /home -m -s /bin/bash"
 chroot ${TARGET} /bin/bash -c "echo wisnuc:wisnuc | chpasswd"
 chroot ${TARGET} /bin/bash -c "adduser wisnuc sudo"
 
-# 安装 ws215i 定制内核（4.3.3）并 hold，避免被后续 apt 升级/替换掉。
+# 安装 ws215i 定制内核（5.10.1）并 hold，避免被后续 apt 升级/替换掉。
 # Debian 13 没有 Ubuntu 的 linux-image-generic/linux-headers-generic meta 包
 # （debootstrap minbase 也不安装 meta 内核），因此直接 hold 定制内核包本身。
-chroot ${TARGET} /bin/bash -c "dpkg -i linux-image-4.3.3.001+_001_amd64.deb"
-chroot ${TARGET} /bin/bash -c "apt-mark hold linux-image-4.3.3.001+"
+chroot ${TARGET} /bin/bash -c "dpkg -i linux-image-5.10.1.001+_5.10.1.001+-2_amd64.deb"
+chroot ${TARGET} /bin/bash -c "apt-mark hold linux-image-5.10.1.001+"
 
 # This does not work in chroot-ed environment.
 # chroot ${TARGET} /bin/bash -c "timedatectl timedatectl set-timezone Asia/Shanghai"
@@ -121,8 +121,8 @@ chroot ${TARGET} /bin/bash -c "systemctl enable systemd-resolved"
 chroot ${TARGET} /bin/bash -c "systemctl enable wisnuc-firstboot"
 # samba/minidlna 不再安装，故无需（也无法）禁用其服务
 
-ln -s vmlinuz-4.3.3.001+ ${TARGET}/boot/bzImage
-ln -s initrd.img-4.3.3.001+ ${TARGET}/boot/ramdisk
+ln -s vmlinuz-5.10.1.001+ ${TARGET}/boot/bzImage
+ln -s initrd.img-5.10.1.001+ ${TARGET}/boot/ramdisk
 echo "console=tty0 console=ttyS0,115200 root=/dev/mmcblk0p1 rootwait" > ${TARGET}/boot/cmdline
 echo "/dev/mmcblk0p1 / ext4 errors=remount-ro 0 1" > ${TARGET}/etc/fstab
 
@@ -132,7 +132,7 @@ umount ${TARGET}/sys
 umount ${TARGET}/proc
 umount ${TARGET}/dev
 
-rm -rf ${TARGET}/linux-image-4.3.3.001+_001_amd64.deb
+rm -rf ${TARGET}/linux-image-5.10.1.001+_5.10.1.001+-2_amd64.deb
 
 # remove resolv.conf used in chroot
 rm ${TARGET}/etc/resolv.conf
