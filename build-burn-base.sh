@@ -21,7 +21,7 @@ mkdir -p ${TARGET}/wisnuc
 # USB 烧录盘本身也是一个包含完整 rootfs 的 Debian 运行系统，不只是 ramdisk。
 debootstrap --variant=minbase --arch=amd64 trixie ${TARGET} http://deb.debian.org/debian
 
-cp assets/linux-image-5.10.1.001+_5.10.1.001+-2_amd64.deb ${TARGET}
+cp assets/linux-image-5.10.1.001+_5.10.1.001+-3_amd64.deb ${TARGET}
 
 cp assets/imageburn.sh ${TARGET}/wisnuc
 
@@ -77,7 +77,7 @@ mount -t sysfs  sys   ${TARGET}/sys
 
 chroot ${TARGET} /bin/bash -c "apt update"
 chroot ${TARGET} /bin/bash -c "apt -y install initramfs-tools parted"
-chroot ${TARGET} /bin/bash -c "dpkg -i linux-image-5.10.1.001+_5.10.1.001+-2_amd64.deb"
+chroot ${TARGET} /bin/bash -c "dpkg -i linux-image-5.10.1.001+_5.10.1.001+-3_amd64.deb"
 
 # this is not necessary, install kernel will update initramfs automatically
 # chroot ${TARGET} /bin/bash -c "update-initramfs -u -k all"
@@ -107,7 +107,7 @@ umount ${TARGET}/sys
 umount ${TARGET}/proc
 umount ${TARGET}/dev
 
-rm ${TARGET}/linux-image-5.10.1.001+_5.10.1.001+-2_amd64.deb
+rm ${TARGET}/linux-image-5.10.1.001+_5.10.1.001+-3_amd64.deb
 
 if [ "$1" == "--debug" ] || [ "$1" == "-d" ]; then
   TARNAME=ws215i-debian13-rootfs-burn-base-debug.tar.gz
