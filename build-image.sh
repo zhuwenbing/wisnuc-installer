@@ -102,8 +102,23 @@ echo "cp $OUTPUT/ws215i-debian13-rootfs-emmc-base.tar.gz"
 cp $OUTPUT/ws215i-debian13-rootfs-emmc-base.tar.gz ${MNT}/wisnuc
 
 sync
-umount $MNT
+umount $MNT || { echo "ERROR: 卸载 ${MNT} 失败，镜像可能未完全同步，已中止（请勿烧录未校验镜像）" >&2; exit 1; }
 losetup -d /dev/loop0 2>/dev/null || true
+
+# 成品校验：重新挂载镜像根分区并跑 e2fsck，确保烧录出去的 ext4 干净一致。
+# 避免因卸载/loop 时序问题把“未完全同步”的镜像烧到 U 盘后被识别为损坏。
+echo "verify image filesystem (e2fsck -fp)"
+losetup /dev/loop0 $IMAGEFILE || { echo "ERROR: 无法重新绑定 loop 做校验，已中止" >&2; exit 1; }
+partprobe /dev/loop0 2>/dev/null || true
+[ -e /dev/loop0p1 ] || partx -a /dev/loop0 2>/dev/null || true
+sleep 1
+if e2fsck -fp /dev/loop0p1; then
+  echo "OK: 根分区文件系统干净一致，可安全烧录"
+else
+  echo "WARN: e2fsck 返回非 0，请检查上方输出（文件系统存在需要手动修复的问题）" >&2
+fi
+losetup -d /dev/loop0 2>/dev/null || true
+sync
 
 # for append build timestamp
 # date +"%y%m%d-%H%M%S" -> 180104-164540
