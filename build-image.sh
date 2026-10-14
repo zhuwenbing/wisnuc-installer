@@ -8,6 +8,25 @@ MNT=tmp/mnt
 TMP=tmp/imagify
 OUTPUT=output
 
+# --- 自愈 /dev（VMware/精简环境可能未正确填充 /dev 设备节点）---
+# build-image 依赖 /dev/zero（dd 建镜像）与 loop 设备（losetup/mount），
+# 以下在 root 下自动补齐，避免依赖手工操作。
+# 1) /dev/zero 缺失则补建（/dev 支持设备节点时 mknod 即可；否则尝试挂 devtmpfs）
+if [ ! -e /dev/zero ]; then
+  echo "WARN: /dev/zero 缺失，尝试自动补建设备节点"
+  mknod /dev/zero c 1 5 2>/dev/null || true
+  if [ ! -e /dev/zero ]; then
+    mount -t devtmpfs none /dev 2>/dev/null || true
+    [ -e /dev/zero ] || mknod /dev/zero c 1 5 2>/dev/null || true
+  fi
+fi
+# 2) 加载 loop 模块（max_part 使分区节点 /dev/loopNpM 自动出现）
+modprobe loop max_part=8 2>/dev/null || true
+# 3) 确保 losetup 依赖的设备节点存在
+[ -e /dev/loop-control ] || mknod /dev/loop-control c 10 237 2>/dev/null || true
+[ -e /dev/loop0 ] || mknod /dev/loop0 b 7 0 2>/dev/null || true
+[ -e /dev/loop1 ] || mknod /dev/loop1 b 7 1 2>/dev/null || true
+
 # 前置检查：build-image 硬性依赖 loop device、完整 /dev 和 mount 能力，
 # 在容器/受限宿主上不可用，提前给出明确报错而不是一路失败。
 if [ ! -e /dev/zero ]; then
@@ -38,7 +57,7 @@ else
   IMAGEFILE=tmp/imagefile
 fi
 
-losetup -d /dev/loop0
+losetup -d /dev/loop0 2>/dev/null || true
 
 rm -rf $TMP
 mkdir -p $TMP
@@ -84,7 +103,7 @@ cp $OUTPUT/ws215i-debian13-rootfs-emmc-base.tar.gz ${MNT}/wisnuc
 
 sync
 umount $MNT
-losetup -d /dev/loop0
+losetup -d /dev/loop0 2>/dev/null || true
 
 # for append build timestamp
 # date +"%y%m%d-%H%M%S" -> 180104-164540
