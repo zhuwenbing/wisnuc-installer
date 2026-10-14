@@ -141,13 +141,13 @@ ws215i-debian13-build-${时间戳}-debug.img
 
 `assets` 目录下包含：
 
-1. ws215i 的定制内核包（debian 格式），内核版本为 4.3.3
+1. ws215i 的定制内核包（debian 格式），内核版本为 5.10.1
 2. 用于烧录的 `imageburn.sh`（把 emmc rootfs 烧录到板载 emmc）
-3. apt 的 `sources.list` 文件（Debian 13 trixie，使用国内镜像源）
+3. apt 的 `debian.sources` 文件（Debian 13 trixie，DEB822 格式，使用国内镜像源）
 
 ## 其他问题
 
 1. 该制作过程使用了 chroot，mount，loop device 等功能，无法在绝大多数云主机上运行；
 2. 注意 chroot 环境下 resolv.conf 的配置；
 3. 因为有 chroot 和装包过程，所以 systemd 官方的 firstboot 服务无法使用，我们自己定义了一个 firstboot service（wisnuc-firstboot）；
-4. `debootstrap` 需要联网从 Debian 源拉取基础系统，境内建议配合镜像使用（见 assets/sources.list 中的注释）。
+4. `debootstrap` 需要联网从 Debian 源拉取基础系统，境内建议配合镜像使用（见 assets/debian.sources 中的注释）。

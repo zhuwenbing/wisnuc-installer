@@ -1,0 +1,19 @@
+# Debian 13 (trixie) - 清华大学 TUNA 镜像，DEB822 格式
+# HTTPS 传输：
+#   - TLS 信任由 chroot 内的 ca-certificates 提供（debootstrap --include=ca-certificates 装入）
+#   - Release 签名由 debian-archive-keyring 提供（minbase 自带）
+# 若不使用国内镜像，可把 URIs 换回：
+#   https://deb.debian.org/debian
+#   https://deb.debian.org/debian-security
+
+Types: deb
+URIs: https://mirrors.tuna.tsinghua.edu.cn/debian
+Suites: trixie trixie-updates
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+Types: deb
+URIs: https://mirrors.tuna.tsinghua.edu.cn/debian-security
+Suites: trixie-security
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg

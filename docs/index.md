@@ -36,4 +36,4 @@ $ sudo ./build-image.sh
 ## 说明
 
 1. 该制作过程使用了 chroot，mount，loop device 等功能，无法在绝大多数云主机上运行，也无法在 Windows 上直接运行；
-2. `debootstrap` 需要联网从 Debian 源拉取基础系统，境内建议配合国内镜像使用（见 assets/sources.list 中的注释）。
+2. `debootstrap` 需要联网从 Debian 源拉取基础系统，境内建议配合国内镜像使用（见 assets/debian.sources 中的注释）。
