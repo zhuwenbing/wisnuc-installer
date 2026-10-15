@@ -85,7 +85,9 @@ echo "partprobe"
 partprobe /dev/loop0
 
 echo "make ext4 file system"
-mkfs.ext4 -U $UUID /dev/loop0p1
+# -O ^orphan_file,^metadata_csum_seed：关闭现代 e2fsprogs(>=1.47) 默认开启、但旧
+# ext4 读取端（DiskGenius/旧 u-boot）不识别的新特性，保证烧录镜像兼容早期工具
+mkfs.ext4 -U $UUID -O ^orphan_file,^metadata_csum_seed /dev/loop0p1
 
 echo "mount"
 mount -t ext4 /dev/loop0p1 $MNT
