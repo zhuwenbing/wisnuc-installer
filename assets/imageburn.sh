@@ -29,8 +29,7 @@ echo "PWR_LED 3" > /proc/BOARD_io
     echo w # Write changes
   ) | fdisk /dev/mmcblk0
 
-  # 同样关闭 orphan_file/metadata_csum_seed，兼容旧 u-boot / 早期 ext4 读取端
-  mkfs.ext4 -F -O ^orphan_file,^metadata_csum_seed /dev/mmcblk0p1
+  mkfs.ext4 -F /dev/mmcblk0p1
   mkdir -p $MNT
   mount /dev/mmcblk0p1 $MNT
   echo "untar rootfs onto emmc"
